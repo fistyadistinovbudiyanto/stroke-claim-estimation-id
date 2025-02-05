@@ -1,0 +1,111 @@
+---
+title: "Untitled"
+output: github_document
+---
+
+```{r}
+df <- read.csv("C:/Users/Acer/Documents/Kuliah/Semester 3/GLM/Project/data_pasien_stroke.csv")
+df
+```
+
+```{r}
+colnames(df)
+as.data.frame(table(df$FKL15))
+```
+
+```{r}
+data <- data.frame(
+  'Nomor Peserta' = df$PSTV01,
+  'Tanggal Lahir' = df$PSTV03,
+  'Jenis Kelamin' = df$PSTV05,
+  'Kelas Rawat' = df$PSTV07,
+  'Segmentasi' = df$PSTV08,
+  'Tanggal Datang FKRTL' = df$FKL03,
+  'Tanggal Pulang FKRTL' = df$FKL04,
+  'Status Pulang' = df$FKL14,
+  'Diagnosis ICD' = df$FKL15,
+  'Regional' = df$FKL31,
+  'Biaya Verifikasi' = df$FKL48
+  )
+```
+
+```{r}
+data
+```
+
+```{r}
+pasien <- as.data.frame(table(data$Nomor.Peserta))
+```
+
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+data$Tanggal.Datang.FKRTL <- as.Date(data$Tanggal.Datang.FKRTL)
+data$Tanggal.Pulang.FKRTL <- as.Date(data$Tanggal.Pulang.FKRTL)
+```
+
+```{r}
+data <- data %>%
+  mutate(Lama.Perawatan = as.numeric(difftime(Tanggal.Pulang.FKRTL, Tanggal.Datang.FKRTL, units = "days")))
+```
+
+```{r}
+data$Lama.Perawatan
+```
+
+
+```{r}
+data <- data %>%
+  mutate(Umur = floor(as.numeric(difftime("2019-12-31", data$Tanggal.Lahir, units = "days")/365)))
+```
+
+```{r}
+data$Umur
+```
+
+```{r}
+data
+```
+
+```{r}
+data[c("Nomor.Peserta", "Status.Pulang", "Kelas.Rawat")]
+```
+
+```{r}
+joindata <- data %>%
+  group_by(Nomor.Peserta) %>%
+  summarise(
+    JenisKelamin = first(Jenis.Kelamin),
+    KelasRawat = first(Kelas.Rawat),
+    Segmentasi = first(Segmentasi),
+    Diagnosis = first(Diagnosis.ICD),
+    Regional = first(Regional),
+    Status = tail(Status.Pulang, 1),
+    LamaPerawatan = sum(Lama.Perawatan),
+    Umur = first(Umur),
+  )
+```
+
+```{r}
+
+joindata
+```
+
+```{r}
+joindata$Status <- ifelse(joindata$Status == 3, 1, 0)
+joindata$Frekuensi <- pasien$Freq
+
+```
+
+```{r}
+
+as.data.frame(table(joindata$Status))
+
+joindata
+library("writexl")
+write_xlsx(joindata,"C:/Users/Acer/Documents/Kuliah/Semester 3/GLM/Project/joindata.xlsx")
+```
+

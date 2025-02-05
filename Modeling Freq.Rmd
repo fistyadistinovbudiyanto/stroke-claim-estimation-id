@@ -1,0 +1,172 @@
+---
+title: "Untitled"
+output: github_document
+---
+
+```{r}
+library(readxl)
+joindata <- read_excel("C:/Users/Acer/Documents/Kuliah/Semester 3/GLM/Project/joindata.xlsx")
+joindata
+```
+
+```{r}
+summary(joindata)
+```
+
+
+#visualisasi data
+
+```{r}
+#respone variable
+library(tidyverse)
+joindata %>%
+  filter(!is.na(Frekuensi)) %>%
+ggplot() +
+  geom_density(mapping=aes(Frekuensi), fill="steelblue", alpha=.5) +
+  labs(x="Frekuensi Klaim") +
+  theme_minimal()
+```
+
+```{r}
+boxplot(Frekuensi~JenisKelamin, data=joindata, xlab="Jenis Kelamin", ylab="Frekuensi Klaim")
+boxplot(Frekuensi~KelasRawat, data=joindata, xlab="Kelas Rawat", ylab="Frekuensi Klaim")
+boxplot(Frekuensi~Segmentasi, data=joindata, xlab="Segmentasi", ylab="Frekuensi Klaim")
+boxplot(Frekuensi~Diagnosis, data=joindata, xlab="Diagnosis", ylab="Frekuensi Klaim")
+boxplot(Frekuensi~Regional, data=joindata, xlab="Regional", ylab="Frekuensi Klaim")
+boxplot(Frekuensi~Status, data=joindata, xlab="Status", ylab="Frekuensi Klaim")
+plot(Frekuensi~LamaPerawatan, data=joindata, xlab="Lama Perawatan", ylab="Frekuensi Klaim")
+plot(Frekuensi~Umur, data=joindata, xlab="Umur", ylab="Frekuensi Klaim")
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+#karena respon variable adalah count data, buat model poisson model dulu
+model1.poi <- glm(Frekuensi ~ factor(JenisKelamin) + factor(KelasRawat) + factor(Segmentasi) + factor(Regional) + factor(Diagnosis) + factor(Status) + LamaPerawatan + Umur, data = joindata, family = "poisson")
+summary(model1.poi)
+```
+
+```{r}
+#cek overdispersi
+library(AER)
+dispersiontest(model1.poi,trafo=1)
+#h0 ditolak, terjadi overdispersi (mean tidaksamadengan variansi)
+```
+
+```{r}
+#karna overdispersi, coba buat negbin modelnya
+library(MASS)
+model1.nb <- glm.nb(Frekuensi ~ factor(JenisKelamin) + factor(KelasRawat) + factor(Segmentasi) + factor(Regional) + factor(Diagnosis) + factor(Status) + LamaPerawatan + Umur, data = joindata)
+summary(model1.nb)
+```
+
+```{r}
+#bukti kalo model negbin emg lebih preferred, selain dari overdispersi
+library(lmtest)
+lrtest(model1.poi,model1.nb)
+#pvalue <0.05, h0:full model=nested model, h0 ditolak, model dengan df lebih banyak preferred 
+```
+
+
+#model yg dibawah ini untuk perbandingan ketika prediktor insignificant dihilangkan, bandingkan AIC, ternyata full model (model1.nb)
+
+```{r}
+model2.nb <- glm.nb(Frekuensi ~ factor(JenisKelamin) + factor(KelasRawat) + factor(Segmentasi) + factor(Regional) + factor(Status) + LamaPerawatan + Umur, data = joindata)
+summary(model2.nb)
+```
+
+
+
+
+
+
+#karena model1.nb punya beberapa prediktor insignificant, prediktor akan di regroup
+
+```{r}
+library(dplyr)
+
+# Create a new column based on conditions
+joindata <- joindata %>%
+  mutate(reSegmentasi = case_when(
+    Segmentasi %in% c("1", "3", "5") ~ "s1",
+    Segmentasi %in% c("2") ~ "s2",
+    Segmentasi %in% c("4") ~ "s3",
+    TRUE ~ NA_character_  # For other cases not mentioned
+  ))
+
+joindata <- joindata %>%
+  mutate(reDiagnosis = case_when(
+    Diagnosis %in% c("652", "653", "655") ~ "ICD1",
+    Diagnosis %in% c("656") ~ "ICD2",
+    TRUE ~ NA_character_  # For other cases not mentioned
+  ))
+
+joindata <- joindata %>%
+  mutate(reKelasRawat = case_when(
+    KelasRawat %in% c("1", "2") ~ "kr1",
+    KelasRawat %in% c("3") ~ "kr2",
+    TRUE ~ NA_character_  # For other cases not mentioned
+  ))
+```
+
+```{r}
+#MODEL FINAL REGROUP
+re.model1.nb <- glm.nb(Frekuensi ~ factor(JenisKelamin) + factor(reKelasRawat) + factor(reSegmentasi) + factor(Regional) + factor(reDiagnosis) + LamaPerawatan + Umur + factor(Status), data = joindata)
+summary(re.model1.nb)
+```
+
+#test kelayakan model final
+
+```{r}
+re.model1.nb$deviance/re.model1.nb$df.residual
+#mendekati 1 artinya model fit dengan data
+qchisq(0.95,6536)
+#residual deviance < 95% chisquare, model layak
+```
+
+```{r}
+# residual pearson test
+chifreq <- sum(residuals(re.model1.nb, type = "pearson")^2)
+with(re.model1.nb, cbind(res.pearson = chifreq, df = df.residual,
+p = pchisq(chifreq, df.residual, lower.tail = FALSE)))
+#pvalue<0.05, model layak
+```
+
+
+#tidak ada pseudo r^2 dan goodness of fit test untuk negative binomial
+#model bagus berdasarkan AIC, signifikansi variable, dan adanya overdispersi yang significant
+
+
+
